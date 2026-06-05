@@ -87,7 +87,7 @@ WCP_MANIFEST = {
     'wcp':     '2.1.0',
     'uuid':    'a3f8c291-7e4b-4d1a-b6f2-9c0e5d3a8b47',
     'name':    'Docker',
-    'version': '1.0.0',
+    'version': '1.1.0',
     'description': (
         'Docker management across local and NAS hosts, plus a Docker Hub browser. '
         'Four instruments: Local Docker, NAS Docker, Docker Hub, Settings.'
@@ -97,7 +97,7 @@ WCP_MANIFEST = {
     'container': {
         'image':            'docker.io/penrithbeacon/wcp-widget-docker',
         'source':           {'type': 'registry'},
-        'tag':              '1.0.0-wcp2.1.0',
+        'tag':              '1.1.0-wcp2.1.0',
         'port':             3744,
         'volumes':          [{'name': 'docker_data', 'mountPath': '/app/data'}],
         'defaultLifecycle': 'always',
@@ -382,6 +382,25 @@ def api_nas_images():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/widget/api/nas/test', methods=['POST'])
+def api_nas_test():
+    data  = request.get_json(force=True) or {}
+    url   = (data.get('url') or '').strip().rstrip('/')
+    token = (data.get('token') or '').strip()
+    if not url:
+        return jsonify({'success': False, 'error': 'NAS agent URL not configured — open Docker Settings'})
+    if not token:
+        token = read_settings().get('nas_agent_token', '')
+    headers = {'Authorization': f'Bearer {token}'} if token else {}
+    try:
+        r = requests.get(f'{url}/containers', headers=headers, timeout=8)
+        result = r.json()
+        return jsonify(result)
+    except requests.exceptions.ConnectionError:
+        return jsonify({'success': False, 'error': 'Cannot reach NAS agent — check URL'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/widget/api/nas/containers/<cid>/<action>', methods=['POST'])
 def api_nas_action(cid, action):
     if action not in ('start', 'stop', 'restart'):
@@ -433,6 +452,25 @@ def api_hub_repos():
             })
         result = {'success': True, 'data': {'repos': repos}}
         set_cache('hub:repos', result)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/widget/api/hub/repos/<name>/description')
+def api_hub_description(name):
+    cache_key = f'hub:desc:{name}'
+    cached = get_cache(cache_key)
+    if cached:
+        return jsonify(cached)
+    try:
+        r = requests.get(
+            f'{HUB_BASE}/repositories/penrithbeacon/{name}/',
+            headers=_hub_headers(),
+            timeout=10,
+        )
+        raw = r.json()
+        result = {'success': True, 'data': {'description': raw.get('full_description', '')}}
+        set_cache(cache_key, result)
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})

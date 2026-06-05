@@ -3,7 +3,8 @@
 A [Widget Context Protocol (WCP)](https://widgetcontextprotocol.com) widget container
 that brings Docker management into any WCP-compatible dashboard. Monitor and control
 containers and images on your local machine and remote NAS, browse your Docker Hub
-repositories, and configure credentials — all without leaving your dashboard.
+repositories with inline documentation, and configure credentials — all without leaving
+your dashboard.
 
 **Specification:** [widgetcontextprotocol.com](https://widgetcontextprotocol.com)  
 **Part of the** [Penrith Beacon WCP](https://penrithbeacon.com) widget suite.
@@ -26,8 +27,8 @@ combined in any arrangement.
 |-----------|:------------:|---------------|
 | **Local Docker** | 12 × 6 | Containers (left) and images (right) on the local machine. Start / stop / restart per container row. |
 | **NAS Docker** | 12 × 6 | Containers (left) and images (right) on a remote NAS running [wcp-docker-agent](https://github.com/penrithbeacon/wcp-docker-agent). Start / stop / restart per container row. |
-| **Docker Hub** | 12 × 6 | Lists all `penrithbeacon/wcp-widget-*` repositories auto-discovered from Docker Hub. Click any repo to see its tags, sizes, and dates. Open on Docker Hub or GitHub in one click. |
-| **Settings** | 12 × 6 | NAS agent URL and Bearer token, optional Docker Hub PAT. Test connection button. |
+| **Docker Hub** | 12 × 6 | Lists all `penrithbeacon` repositories. Click any repo to see tags (newest first), then expand the **Documentation** section to read the full README rendered inline — fetched live from Docker Hub. Open on Docker Hub or GitHub in one click. |
+| **Settings** | 12 × 6 | NAS agent URL and Bearer token, optional Docker Hub PAT. Test connection validates form values before save. |
 
 All cards use sticky headers with refresh buttons and themed scrollbars throughout.
 
@@ -111,8 +112,9 @@ docker logs wcp-docker-agent
 # [wcp-docker-agent] *** Bearer token (save this): <token> ***
 ```
 
-**Configure the widget:** Open the **Settings** instrument and paste the agent URL
-(e.g. `http://nas.local:3745`) and token, then click **Save**.
+**Configure the widget:** Open the **Settings** instrument, paste the agent URL
+(e.g. `http://nas.local:3745`) and token, then click **Test connection** to verify,
+and **Save**.
 
 ---
 
@@ -121,6 +123,11 @@ docker logs wcp-docker-agent
 The Docker Hub instrument auto-discovers all repositories under the `penrithbeacon`
 namespace using the public Docker Hub v2 API — no token required. New containers
 automatically appear as they are published.
+
+Selecting a repository shows:
+- Tags sorted newest-first with size and last-updated
+- A collapsible **Documentation** section that fetches and renders the repository's
+  full README from Docker Hub inline, with syntax-highlighted code blocks and tables
 
 Optionally set a Docker Hub PAT in Settings to view pull counts for private images.
 
@@ -144,9 +151,11 @@ Optionally set a Docker Hub PAT in Settings to view pull counts for private imag
 | `POST /widget/api/local/containers/<id>/<action>` | POST | Start / stop / restart local container |
 | `GET /widget/api/nas/containers` | GET | NAS container list via agent (15 s cache) |
 | `GET /widget/api/nas/images` | GET | NAS image list via agent (15 s cache) |
+| `POST /widget/api/nas/test` | POST | Test NAS agent connection using supplied URL and token |
 | `POST /widget/api/nas/containers/<id>/<action>` | POST | Start / stop / restart NAS container |
 | `GET /widget/api/hub/repos` | GET | Docker Hub repo list for `penrithbeacon` (15 s cache) |
-| `GET /widget/api/hub/repos/<name>/tags` | GET | Tags for a specific Docker Hub repo (15 s cache) |
+| `GET /widget/api/hub/repos/<name>/tags` | GET | Tags for a repo, sorted newest-first (15 s cache) |
+| `GET /widget/api/hub/repos/<name>/description` | GET | Full README markdown for a repo (15 s cache) |
 | `GET /widget/api/settings` | GET | Current settings (tokens masked) |
 | `POST /widget/api/settings` | POST | Update settings |
 | `GET /widget/api/guids` | GET | Component UUIDs for Bonjour discovery |
@@ -183,7 +192,7 @@ returns masked values (`••••••••`) and a `_set: true/false` flag
 | Property | Value |
 |----------|-------|
 | WCP Version | 2.1.0 |
-| Widget Version | 1.0.0 |
+| Widget Version | 1.1.0 |
 | Render mode | iframe |
 | Auth | none (credentials stored server-side) |
 | Default card size | 12 × 6 |
@@ -193,11 +202,26 @@ returns masked values (`••••••••`) and a `_set: true/false` flag
 ## Technical Details
 
 - **Base image:** `python:3.12-slim`
+- **Platforms:** `linux/amd64`, `linux/arm64`
 - **Port:** `3744`
 - **Framework:** Flask
 - **Dependencies:** Flask, requests, docker (Python SDK)
 - **Docker socket:** mounted at `/var/run/docker.sock:rw` for local container access
 - **Persistent storage:** Named Docker volume for settings
+
+---
+
+## Tags
+
+| Tag | Description |
+|-----|-------------|
+| `latest` | Latest stable release — multi-arch (`linux/amd64`, `linux/arm64`) |
+| `1.1.0-wcp2.1.0` | Widget v1.1.0, WCP 2.1.0 — inline Hub docs, tags newest-first, test-connection fix |
+| `1.0.0-wcp2.1.0` | Widget v1.0.0, WCP 2.1.0 — initial release |
+
+> **Platform history:** `latest` was rebuilt as a multi-arch image on 2026-06-05, adding
+> `linux/amd64` support (Synology NAS, Intel/AMD servers). The initial `1.0.0-wcp2.1.0`
+> tag was built on Apple Silicon and is `linux/arm64` only.
 
 ---
 

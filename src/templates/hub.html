@@ -66,6 +66,43 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg,#0d1117);
   transition:color .15s,border-color .15s;}
 .tag-open:hover{color:var(--accent,#f0883e);border-color:var(--accent,#f0883e);}
 
+/* Collapsible docs section */
+.docs-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+  padding:10px 0 6px;border-top:1px solid var(--border,#30363d);margin-top:10px;}
+.docs-toggle-icon{font-size:10px;color:var(--muted,#8b949e);transition:transform .2s;flex-shrink:0;}
+.docs-toggle.open .docs-toggle-icon{transform:rotate(90deg);}
+.docs-body{display:none;padding-top:6px;}
+.docs-body.open{display:block;}
+.docs-loading{font-size:12px;color:var(--muted,#8b949e);padding:8px 0;}
+
+/* Rendered markdown styles */
+.md h1{font-size:15px;font-weight:700;margin:14px 0 6px;color:var(--text,#e6edf3);}
+.md h2{font-size:13px;font-weight:700;margin:12px 0 5px;color:var(--accent,#f0883e);}
+.md h3{font-size:12px;font-weight:700;margin:10px 0 4px;color:var(--text,#e6edf3);}
+.md h4{font-size:12px;font-weight:600;margin:8px 0 3px;color:var(--muted,#8b949e);}
+.md p{font-size:12px;line-height:1.6;margin:5px 0;color:var(--text,#e6edf3);}
+.md ul{padding-left:16px;margin:5px 0;}
+.md li{font-size:12px;line-height:1.6;color:var(--text,#e6edf3);margin:2px 0;}
+.md strong{font-weight:700;}
+.md code{background:var(--surface2,#1c2128);border:1px solid var(--border,#30363d);
+  border-radius:3px;padding:1px 5px;font-family:'SF Mono','Fira Code',monospace;
+  font-size:11px;color:var(--text,#e6edf3);}
+.md pre{background:var(--surface2,#1c2128);border:1px solid var(--border,#30363d);
+  border-radius:6px;padding:10px 12px;margin:6px 0;overflow-x:auto;}
+.md pre code{background:none;border:none;padding:0;font-size:11px;line-height:1.5;}
+.md table{width:100%;border-collapse:collapse;margin:6px 0;font-size:11px;}
+.md th{background:var(--surface2,#1c2128);padding:5px 8px;text-align:left;
+  border:1px solid var(--border,#30363d);font-weight:600;color:var(--muted,#8b949e);}
+.md td{padding:5px 8px;border:1px solid var(--border,#30363d);vertical-align:top;line-height:1.4;}
+.md tr:nth-child(even) td{background:rgba(255,255,255,.02);}
+.md blockquote{border-left:3px solid var(--accent,#f0883e);margin:6px 0;
+  padding:6px 10px;background:rgba(240,136,62,.06);border-radius:0 4px 4px 0;
+  font-size:12px;color:var(--muted,#8b949e);line-height:1.5;}
+.md hr{border:none;border-top:1px solid var(--border,#30363d);margin:10px 0;}
+.md a{color:var(--accent,#f0883e);text-decoration:none;cursor:pointer;}
+.md a:hover{text-decoration:underline;}
+.md h1:first-child{margin-top:4px;}
+
 .state-msg{padding:16px 12px;font-size:12px;color:var(--muted,#8b949e);}
 .state-error{color:var(--red,#f85149);}
 .placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -131,8 +168,7 @@ function fmtDate(iso) {
     if (hrs < 24)   return `${hrs}h ago`;
     const days = Math.floor(hrs / 24);
     if (days < 30)  return `${days}d ago`;
-    const mos = Math.floor(days / 30);
-    return `${mos}mo ago`;
+    return `${Math.floor(days / 30)}mo ago`;
   } catch { return '—'; }
 }
 
@@ -142,6 +178,89 @@ function fmtPulls(n) {
   if (n >= 1000) return `${(n/1000).toFixed(1)}K pulls`;
   return `${n} pulls`;
 }
+
+// ── Markdown renderer ────────────────────────────────────────────────────────
+
+function renderMd(src) {
+  const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function inline(s) {
+    return s
+      .replace(/\*\*(.+?)\*\*/g, (_,t) => `<strong>${t}</strong>`)
+      .replace(/`([^`\n]+)`/g, (_,t) => `<code>${escHtml(t)}</code>`)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_,t,u) =>
+        `<a href="#" onclick="openExternal('${escHtml(u)}');return false;">${escHtml(t)}</a>`);
+  }
+
+  const lines = src.split('\n');
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.startsWith('```')) {
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) { codeLines.push(lines[i]); i++; }
+      out.push(`<pre><code>${escHtml(codeLines.join('\n'))}</code></pre>`);
+      i++; continue;
+    }
+
+    // Table
+    if (line.startsWith('|')) {
+      const rows = [];
+      while (i < lines.length && lines[i].trimStart().startsWith('|')) { rows.push(lines[i]); i++; }
+      const parseRow = r => r.split('|').slice(1,-1).map(c => c.trim());
+      const isSep = r => /^[\s|:-]+$/.test(r);
+      const headers = parseRow(rows[0]);
+      let tbl = '<table><thead><tr>';
+      headers.forEach(h => { tbl += `<th>${inline(h)}</th>`; });
+      tbl += '</tr></thead><tbody>';
+      for (let j = 1; j < rows.length; j++) {
+        if (isSep(rows[j])) continue;
+        tbl += '<tr>';
+        parseRow(rows[j]).forEach(c => { tbl += `<td>${inline(c)}</td>`; });
+        tbl += '</tr>';
+      }
+      tbl += '</tbody></table>';
+      out.push(tbl); continue;
+    }
+
+    // Headings
+    const hm = line.match(/^(#{1,4}) (.+)/);
+    if (hm) { out.push(`<h${hm[1].length}>${inline(hm[2])}</h${hm[1].length}>`); i++; continue; }
+
+    // HR
+    if (/^-{3,}$/.test(line.trim())) { out.push('<hr>'); i++; continue; }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      const bq = [];
+      while (i < lines.length && lines[i].startsWith('> ')) { bq.push(lines[i].slice(2)); i++; }
+      out.push(`<blockquote>${bq.map(inline).join('<br>')}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*] /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        items.push(lines[i].replace(/^[-*] /, '')); i++;
+      }
+      out.push('<ul>' + items.map(t => `<li>${inline(t)}</li>`).join('') + '</ul>');
+      continue;
+    }
+
+    // Blank line or paragraph
+    if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+    i++;
+  }
+  return out.join('\n');
+}
+
+// ── Repo list ────────────────────────────────────────────────────────────────
 
 let _repos = [];
 let _activeRepo = null;
@@ -184,13 +303,15 @@ function renderRepoList() {
   ).join('');
 }
 
+// ── Repo detail ──────────────────────────────────────────────────────────────
+
 async function selectRepo(name) {
   _activeRepo = name;
-  renderRepoList(); // update active highlight
+  renderRepoList();
   const repo = _repos.find(r => r.name === name);
   document.getElementById('detail-header-name').textContent = repo?.display || name;
   const body = document.getElementById('body-detail');
-  body.innerHTML = '<div class="state-msg">Loading tags…</div>';
+  body.innerHTML = '<div class="state-msg">Loading…</div>';
   try {
     const r = await wcpFetch(`/widget/api/hub/repos/${encodeURIComponent(name)}/tags`);
     const data = await r.json();
@@ -198,10 +319,9 @@ async function selectRepo(name) {
       body.innerHTML = `<div class="state-msg state-error">${esc(data.error)}</div>`;
       return;
     }
-    const tags = data.data.tags || [];
+    const tags = (data.data.tags || []).sort((a,b) => new Date(b.updated) - new Date(a.updated));
     const hubUrl = `https://hub.docker.com/r/penrithbeacon/${encodeURIComponent(name)}`;
-    const ghSlug = name.startsWith('wcp-widget-') ? name : `wcp-widget-${name}`;
-    const ghUrl  = `https://github.com/penrithbeacon/${encodeURIComponent(ghSlug)}`;
+    const ghUrl  = `https://github.com/penrithbeacon/${encodeURIComponent(name)}`;
 
     body.innerHTML = `<div class="detail-wrap">
       <div class="detail-title">penrithbeacon/${esc(name)}</div>
@@ -220,19 +340,54 @@ async function selectRepo(name) {
           <button class="tag-open" onclick="openExternal('${esc(tagUrl)}')" title="Open on Docker Hub">↗</button>
         </div>`;
       }).join('') : '<div class="state-msg">No tags found.</div>'}
+      <div class="docs-toggle" id="docs-toggle-${esc(name)}" onclick="toggleDocs('${esc(name)}')">
+        <span class="docs-toggle-icon">▶</span>
+        <span class="section-label" style="margin:0;">Documentation</span>
+      </div>
+      <div class="docs-body" id="docs-body-${esc(name)}">
+        <div class="docs-loading">Loading…</div>
+      </div>
     </div>`;
   } catch (e) {
     body.innerHTML = `<div class="state-msg state-error">${esc(e.message)}</div>`;
   }
 }
 
+let _descCache = {};
+let _docsOpen  = {};
+
+async function toggleDocs(name) {
+  const toggle = document.getElementById(`docs-toggle-${name}`);
+  const body   = document.getElementById(`docs-body-${name}`);
+  if (!toggle || !body) return;
+  const nowOpen = !_docsOpen[name];
+  _docsOpen[name] = nowOpen;
+  toggle.classList.toggle('open', nowOpen);
+  body.classList.toggle('open', nowOpen);
+  if (!nowOpen) return;
+
+  // Already loaded
+  if (_descCache[name]) {
+    body.innerHTML = `<div class="md">${_descCache[name]}</div>`;
+    return;
+  }
+  body.innerHTML = '<div class="docs-loading">Loading…</div>';
+  try {
+    const r = await wcpFetch(`/widget/api/hub/repos/${encodeURIComponent(name)}/description`);
+    const data = await r.json();
+    if (!data.success || !data.data.description) {
+      body.innerHTML = '<div class="docs-loading">No documentation available.</div>';
+      return;
+    }
+    _descCache[name] = renderMd(data.data.description);
+    body.innerHTML = `<div class="md">${_descCache[name]}</div>`;
+  } catch (e) {
+    body.innerHTML = `<div class="state-msg state-error">${esc(e.message)}</div>`;
+  }
+}
+
 function openExternal(url) {
-  window.parent?.postMessage({
-    type: 'wcp:open-window',
-    url,
-    width: 1100,
-    height: 700,
-  }, '*');
+  window.parent?.postMessage({ type: 'wcp:open-window', url, width: 1100, height: 700 }, '*');
 }
 
 loadRepos(false);

@@ -191,12 +191,10 @@ async function testAgent() {
   result.style.color = 'var(--muted,#8b949e)';
   result.textContent = 'Testing…';
   try {
-    // Test via server-side proxy to avoid CORS
-    const r = await wcpFetch('/widget/api/nas/containers', {
-      headers: {
-        'X-Test-Url':   url,
-        'X-Test-Token': token || '(using saved token)',
-      },
+    const r = await wcpFetch('/widget/api/nas/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, token }),
     });
     const d = await r.json();
     if (d.success) {
