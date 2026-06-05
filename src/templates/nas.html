@@ -207,11 +207,15 @@ Promise.allSettled([
   renderImages(    ni.status === 'fulfilled' ? ni.value : { success: false, error: ni.reason?.message }, 'body-ni', 'ni-count');
 });
 
+function _applyThemeVars(vars) {
+  for (const [k, v] of Object.entries(vars))
+    document.documentElement.style.setProperty(k, v);
+}
 window.parent?.postMessage({ type: 'wcp:ready' }, '*');
+window.parent?.postMessage({ type: 'wcp:request-theme' }, '*');
 window.addEventListener('message', e => {
-  if (e.data?.type === 'wcp:context' && e.data.theme)
-    for (const [k, v] of Object.entries(e.data.theme))
-      document.documentElement.style.setProperty(k, v);
+  if (e.data?.type === 'wcp:context' && e.data.theme) _applyThemeVars(e.data.theme);
+  if (e.data?.type === 'wcp:theme' && e.data.vars)    _applyThemeVars(e.data.vars);
 });
 </script>
 </body>
