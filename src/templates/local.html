@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local Docker</title>
+<script type="application/ld+json">{{ jsonld|safe }}</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg,#0d1117);
+  color:var(--text,#e6edf3);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;}
+
+/* ── Themed scrollbars ──────────────────────────────────────────── */
+*::-webkit-scrollbar{width:8px;height:8px;}
+*::-webkit-scrollbar-track{background:var(--surface2,#1c2128);}
+*::-webkit-scrollbar-thumb{background:var(--border,#30363d);border-radius:4px;}
+*::-webkit-scrollbar-thumb:hover{background:var(--muted,#8b949e);}
+*{scrollbar-color:var(--border,#30363d) var(--surface2,#1c2128);scrollbar-width:thin;}
+
+/* ── Layout ─────────────────────────────────────────────────────── */
+.instrument{display:flex;height:100%;gap:10px;padding:10px;overflow:hidden;}
+.card{display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden;
+  border:1px solid var(--border,#30363d);border-radius:8px;background:var(--surface,#161b22);}
+.card-header{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:9px 12px;border-bottom:1px solid var(--border,#30363d);gap:8px;}
+.card-title{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;min-width:0;}
+.card-title-icon{flex-shrink:0;opacity:.7;font-size:14px;}
+.card-title-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-subtitle{font-size:11px;color:var(--muted,#8b949e);font-weight:400;flex-shrink:0;}
+.refresh-btn{background:none;border:none;color:var(--muted,#8b949e);cursor:pointer;
+  padding:3px 6px;border-radius:5px;font-size:14px;line-height:1;flex-shrink:0;
+  transition:color .15s,background .15s;}
+.refresh-btn:hover{color:var(--text,#e6edf3);background:var(--surface2,#1c2128);}
+.refresh-btn.spinning{animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.card-body{flex:1;overflow-y:auto;padding:2px 0;}
+
+/* ── Rows ────────────────────────────────────────────────────────── */
+.docker-row{display:flex;align-items:center;gap:8px;padding:7px 12px;
+  border-bottom:1px solid rgba(48,54,61,.5);font-size:12px;}
+.docker-row:last-child{border-bottom:none;}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.dot-green{background:var(--green,#3fb950);}
+.dot-yellow{background:var(--yellow,#d29922);}
+.dot-red{background:var(--red,#f85149);}
+.docker-name{font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.docker-image{font-size:11px;color:var(--muted,#8b949e);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.docker-size{font-size:11px;color:var(--muted,#8b949e);flex-shrink:0;}
+.docker-actions{display:flex;gap:4px;flex-shrink:0;}
+.docker-btn{font-size:11px;padding:2px 7px;border-radius:4px;border:1px solid var(--border,#30363d);
+  background:var(--surface2,#1c2128);color:var(--text,#e6edf3);cursor:pointer;line-height:1.5;
+  transition:background .15s,border-color .15s;}
+.docker-btn:hover{background:var(--surface,#161b22);border-color:var(--muted,#8b949e);}
+.docker-btn:disabled{opacity:.4;cursor:default;}
+.docker-btn-start{color:var(--green,#3fb950);border-color:rgba(63,185,80,.3);}
+.docker-btn-stop{color:var(--red,#f85149);border-color:rgba(248,81,73,.3);}
+.docker-btn-restart{color:var(--blue,#58a6ff);border-color:rgba(88,166,255,.3);}
+
+/* ── Empty / error states ────────────────────────────────────────── */
+.state-msg{padding:16px 12px;font-size:12px;color:var(--muted,#8b949e);}
+.state-error{color:var(--red,#f85149);}
+</style>
+</head>
+<body>
+<div class="instrument">
+  <!-- Local Containers -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <span class="card-title-icon">📦</span>
+        <span class="card-title-text">Local — Containers</span>
+      </div>
+      <span class="card-subtitle" id="lc-count"></span>
+      <button class="refresh-btn" id="btn-lc" title="Refresh" onclick="refresh('lc')">↺</button>
+    </div>
+    <div class="card-body" id="body-lc"><div class="state-msg">Loading…</div></div>
+  </div>
+  <!-- Local Images -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <span class="card-title-icon">🖼</span>
+        <span class="card-title-text">Local — Images</span>
+      </div>
+      <span class="card-subtitle" id="li-count"></span>
+      <button class="refresh-btn" id="btn-li" title="Refresh" onclick="refresh('li')">↺</button>
+    </div>
+    <div class="card-body" id="body-li"><div class="state-msg">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+const WCP_ORCHESTRATION_ID = "{{ wcp_orchestration_id|default('', true) }}";
+const WCP_APPLICATION_ID   = "{{ wcp_application_id|default('', true) }}";
+
+function wcpFetch(url, opts) {
+  opts = opts || {};
+  const h = {};
+  if (WCP_ORCHESTRATION_ID) h['Wcp-Orchestration-Id'] = WCP_ORCHESTRATION_ID;
+  if (WCP_APPLICATION_ID)   h['Wcp-Application-Id']   = WCP_APPLICATION_ID;
+  opts.headers = Object.assign({}, opts.headers || {}, h);
+  return fetch(url, opts);
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function stateDot(state) {
+  if (!state) return 'dot-red';
+  const s = state.toLowerCase();
+  if (s === 'running') return 'dot-green';
+  if (s === 'paused')  return 'dot-yellow';
+  return 'dot-red';
+}
+
+function renderContainers(resp, bodyId, countId) {
+  const body = document.getElementById(bodyId);
+  const cnt  = document.getElementById(countId);
+  if (!resp?.success) {
+    body.innerHTML = `<div class="state-msg state-error">${esc(resp?.error || 'Failed to load')}</div>`;
+    cnt.textContent = '';
+    return;
+  }
+  const containers = resp.data?.containers || [];
+  cnt.textContent = `${containers.length} container${containers.length !== 1 ? 's' : ''}`;
+  if (!containers.length) {
+    body.innerHTML = '<div class="state-msg">No containers found.</div>';
+    return;
+  }
+  body.innerHTML = containers.map(c => {
+    const dot      = stateDot(c.state);
+    const running  = c.state === 'running';
+    const paused   = c.state === 'paused';
+    const stopped  = !running && !paused;
+    return `<div class="docker-row">
+      <span class="dot ${dot}"></span>
+      <span class="docker-name" title="${esc(c.name)}">${esc(c.name)}</span>
+      <span class="docker-image" title="${esc(c.image)}">${esc(c.image)}</span>
+      <span class="docker-actions">
+        ${stopped ? `<button class="docker-btn docker-btn-start" onclick="action('local','${esc(c.id)}','start',this)" title="Start">▶</button>` : ''}
+        ${(running||paused) ? `<button class="docker-btn docker-btn-stop" onclick="action('local','${esc(c.id)}','stop',this)" title="Stop">■</button>` : ''}
+        ${running ? `<button class="docker-btn docker-btn-restart" onclick="action('local','${esc(c.id)}','restart',this)" title="Restart">↺</button>` : ''}
+      </span>
+    </div>`;
+  }).join('');
+}
+
+function renderImages(resp, bodyId, countId) {
+  const body = document.getElementById(bodyId);
+  const cnt  = document.getElementById(countId);
+  if (!resp?.success) {
+    body.innerHTML = `<div class="state-msg state-error">${esc(resp?.error || 'Failed to load')}</div>`;
+    cnt.textContent = '';
+    return;
+  }
+  const images = resp.data?.images || [];
+  cnt.textContent = `${images.length} image${images.length !== 1 ? 's' : ''}`;
+  if (!images.length) {
+    body.innerHTML = '<div class="state-msg">No images found.</div>';
+    return;
+  }
+  body.innerHTML = images.map(img => {
+    const label = img.repo === '<none>' ? '<none>' : `${esc(img.repo)}:${esc(img.tag)}`;
+    return `<div class="docker-row">
+      <span class="docker-name" title="${label}">${label}</span>
+      <span class="docker-size">${esc(img.size)}</span>
+    </div>`;
+  }).join('');
+}
+
+async function refresh(card) {
+  const btn = document.getElementById(`btn-${card}`);
+  btn.classList.add('spinning');
+  try {
+    if (card === 'lc') {
+      const r = await wcpFetch('/widget/api/local/containers');
+      renderContainers(await r.json(), 'body-lc', 'lc-count');
+    } else {
+      const r = await wcpFetch('/widget/api/local/images');
+      renderImages(await r.json(), 'body-li', 'li-count');
+    }
+  } catch (e) {
+    const bodyId = card === 'lc' ? 'body-lc' : 'body-li';
+    document.getElementById(bodyId).innerHTML =
+      `<div class="state-msg state-error">${esc(e.message)}</div>`;
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+async function action(loc, id, act, btn) {
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '…';
+  try {
+    const r = await wcpFetch(`/widget/api/${loc}/containers/${id}/${act}`, { method: 'POST' });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Action failed');
+    await refresh('lc');
+  } catch (e) {
+    alert(`Docker ${act} failed: ${e.message}`);
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// Initial load
+Promise.allSettled([
+  wcpFetch('/widget/api/local/containers').then(r => r.json()),
+  wcpFetch('/widget/api/local/images').then(r => r.json()),
+]).then(([lc, li]) => {
+  renderContainers(lc.status === 'fulfilled' ? lc.value : { success: false, error: lc.reason?.message }, 'body-lc', 'lc-count');
+  renderImages(    li.status === 'fulfilled' ? li.value : { success: false, error: li.reason?.message }, 'body-li', 'li-count');
+});
+
+window.parent?.postMessage({ type: 'wcp:ready' }, '*');
+window.addEventListener('message', e => {
+  if (e.data?.type === 'wcp:context' && e.data.theme)
+    for (const [k, v] of Object.entries(e.data.theme))
+      document.documentElement.style.setProperty(k, v);
+});
+</script>
+</body>
+</html>

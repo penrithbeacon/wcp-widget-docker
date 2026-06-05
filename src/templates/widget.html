@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Docker</title>
+<script type="application/ld+json">{{ jsonld|safe }}</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;background:var(--bg,#0d1117);color:var(--text,#e6edf3);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;overflow:hidden;}
+.wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;padding:20px;}
+h2{font-size:15px;font-weight:700;color:var(--accent,#f0883e);}
+p{font-size:12px;color:var(--muted,#8b949e);text-align:center;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:480px;}
+.btn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 10px;
+  background:var(--surface,#161b22);border:1px solid var(--border,#30363d);border-radius:8px;
+  color:var(--text,#e6edf3);cursor:pointer;font-size:11px;text-decoration:none;
+  transition:background .15s,border-color .15s;}
+.btn:hover{background:var(--surface2,#1c2128);border-color:var(--accent,#f0883e);}
+.btn-icon{font-size:20px;}
+.btn-label{font-weight:600;font-size:12px;}
+.btn-desc{color:var(--muted,#8b949e);font-size:10px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>🐳 Docker</h2>
+  <p>Select an instrument to add to your dashboard</p>
+  <div class="grid">
+    <a class="btn" href="/widget/local">
+      <span class="btn-icon">🖥</span>
+      <span class="btn-label">Local Docker</span>
+      <span class="btn-desc">Containers &amp; images on this machine</span>
+    </a>
+    <a class="btn" href="/widget/nas">
+      <span class="btn-icon">🗄</span>
+      <span class="btn-label">NAS Docker</span>
+      <span class="btn-desc">Containers &amp; images on your NAS</span>
+    </a>
+    <a class="btn" href="/widget/hub">
+      <span class="btn-icon">☁️</span>
+      <span class="btn-label">Docker Hub</span>
+      <span class="btn-desc">Browse penrithbeacon repositories</span>
+    </a>
+    <a class="btn" href="/widget/settings">
+      <span class="btn-icon">⚙️</span>
+      <span class="btn-label">Settings</span>
+      <span class="btn-desc">NAS agent URL, token &amp; Hub PAT</span>
+    </a>
+  </div>
+</div>
+<script>
+window.parent?.postMessage({ type: 'wcp:ready' }, '*');
+window.addEventListener('message', e => {
+  if (e.data?.type === 'wcp:context' && e.data.theme)
+    for (const [k, v] of Object.entries(e.data.theme))
+      document.documentElement.style.setProperty(k, v);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+services:
+  docker-widget:
+    build: .
+    image: wcp-widget-docker
+    container_name: wcp-widget-docker
+    ports:
+      - "3744:3744"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - docker_data:/app/data
+      - ./published:/app/published
+    restart: unless-stopped
+
+volumes:
+  docker_data:
