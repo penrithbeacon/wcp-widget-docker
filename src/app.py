@@ -5,6 +5,7 @@ Port: 3744  |  Specification: https://widgetcontextprotocol.com
 """
 
 import io, json, os, time, zipfile
+from urllib.parse import urlparse
 import requests
 import docker as docker_sdk
 from flask import Flask, jsonify, request, Response, render_template
@@ -87,7 +88,7 @@ WCP_MANIFEST = {
     'wcp':     '2.1.0',
     'uuid':    'a3f8c291-7e4b-4d1a-b6f2-9c0e5d3a8b47',
     'name':    'Docker',
-    'version': '1.1.0',
+    'version': '1.2.0',
     'description': (
         'Docker management across local and NAS hosts, plus a Docker Hub browser. '
         'Four instruments: Local Docker, NAS Docker, Docker Hub, Settings.'
@@ -97,7 +98,7 @@ WCP_MANIFEST = {
     'container': {
         'image':            'docker.io/penrithbeacon/wcp-widget-docker',
         'source':           {'type': 'registry'},
-        'tag':              '1.1.0-wcp2.1.0',
+        'tag':              '1.2.0-wcp2.1.0',
         'port':             3744,
         'volumes':          [{'name': 'docker_data', 'mountPath': '/app/data'}],
         'defaultLifecycle': 'always',
@@ -356,6 +357,11 @@ def api_nas_containers():
         r = requests.get(url, headers=_nas_headers(), timeout=8)
         result = r.json()
         if result.get('success'):
+            # Include NAS hostname so frontend can build clickable port links
+            nas_host = urlparse(read_settings().get('nas_agent_url', '')).hostname or 'NAS.local'
+            if 'data' not in result:
+                result['data'] = {}
+            result['data']['nas_host'] = nas_host
             set_cache('nas:containers', result)
         return jsonify(result)
     except requests.exceptions.ConnectionError:
