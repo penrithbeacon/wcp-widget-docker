@@ -128,6 +128,7 @@ This widget supports the WCP 2.1.0 request headers:
 | Tag | Description |
 |-----|-------------|
 | `latest` | Latest stable release — multi-arch (`linux/amd64`, `linux/arm64`) |
+| `1.3.0-wcp2.1.0` | Widget v1.3.0, WCP 2.1.0 — `/widget/health` returns `container` name |
 | `1.1.0-wcp2.1.0` | Widget v1.1.0, WCP 2.1.0 — inline Hub docs, tags newest-first, test-connection fix |
 | `1.0.0-wcp2.1.0` | Widget v1.0.0, WCP 2.1.0 — initial release |
 
