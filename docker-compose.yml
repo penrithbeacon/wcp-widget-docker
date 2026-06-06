@@ -9,6 +9,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:rw
       - docker_data:/app/data
       - ./published:/app/published
+    environment:
+      - CONTAINER_NAME=wcp-widget-docker
     restart: unless-stopped
 
 volumes:

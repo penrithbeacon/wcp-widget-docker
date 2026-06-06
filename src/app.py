@@ -225,7 +225,8 @@ def widget_wcp():
 
 @app.route('/widget/health')
 def widget_health():
-    return jsonify({'status': 'ok', 'name': WCP_MANIFEST['name']})
+    return jsonify({'status': 'ok', 'name': WCP_MANIFEST['name'],
+                    'container': os.environ.get('CONTAINER_NAME', 'unknown')})
 
 # ── Template routes ───────────────────────────────────────────────────────────
 
