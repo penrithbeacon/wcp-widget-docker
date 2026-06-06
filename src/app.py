@@ -346,6 +346,25 @@ def _nas_url(path):
     base = read_settings().get('nas_agent_url', '').rstrip('/')
     return f'{base}{path}' if base else None
 
+def _nas_parse(r):
+    """Parse a NAS agent response, returning a friendly error dict on non-200 status."""
+    if r.status_code == 401:
+        return {'success': False, 'error': (
+            'NAS agent authentication failed — the Bearer token is wrong or has changed. '
+            'The agent generates a new token on first start (or after the data volume is '
+            'recreated). Retrieve the current token with:\n'
+            '  docker logs wcp-docker-agent | grep Bearer\n'
+            'Then paste it into the NAS Agent Token field in Docker Settings.'
+        )}
+    if r.status_code == 403:
+        return {'success': False, 'error': 'NAS agent refused the request (403 Forbidden).'}
+    if r.status_code >= 400:
+        return {'success': False, 'error': f'NAS agent returned HTTP {r.status_code}.'}
+    try:
+        return r.json()
+    except Exception:
+        return {'success': False, 'error': f'NAS agent returned an unexpected response (HTTP {r.status_code}).'}
+
 @app.route('/widget/api/nas/containers')
 def api_nas_containers():
     cached = get_cache('nas:containers')
@@ -356,7 +375,7 @@ def api_nas_containers():
         return jsonify({'success': False, 'error': 'NAS agent URL not configured — open Docker Settings'})
     try:
         r = requests.get(url, headers=_nas_headers(), timeout=8)
-        result = r.json()
+        result = _nas_parse(r)
         if result.get('success'):
             # Include NAS hostname so frontend can build clickable port links
             nas_host = urlparse(read_settings().get('nas_agent_url', '')).hostname or 'NAS.local'
@@ -380,7 +399,7 @@ def api_nas_images():
         return jsonify({'success': False, 'error': 'NAS agent URL not configured — open Docker Settings'})
     try:
         r = requests.get(url, headers=_nas_headers(), timeout=8)
-        result = r.json()
+        result = _nas_parse(r)
         if result.get('success'):
             set_cache('nas:images', result)
         return jsonify(result)
@@ -401,7 +420,7 @@ def api_nas_test():
     headers = {'Authorization': f'Bearer {token}'} if token else {}
     try:
         r = requests.get(f'{url}/containers', headers=headers, timeout=8)
-        result = r.json()
+        result = _nas_parse(r)
         return jsonify(result)
     except requests.exceptions.ConnectionError:
         return jsonify({'success': False, 'error': 'Cannot reach NAS agent — check URL'})
@@ -417,7 +436,7 @@ def api_nas_action(cid, action):
         return jsonify({'success': False, 'error': 'NAS agent URL not configured'})
     try:
         r = requests.post(url, headers=_nas_headers(), timeout=15)
-        result = r.json()
+        result = _nas_parse(r)
         if result.get('success'):
             clear_cache('nas:containers')
         return jsonify(result)
